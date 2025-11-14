@@ -701,3 +701,540 @@ Display to User with Summary
 
 ---
 
+
+## 6. Diagram Generation Pipeline
+
+### Overview
+When output format is "diagram", Khoj generates diagrams using either Mermaid.js (flowcharts, sequences, etc.) or Excalidraw (hand-drawn style).
+
+### Pipeline Diagram
+
+```
+        User Diagram Request
+                │
+        ┌───────┴───────┐
+        │               │
+        ▼               ▼
+   Mermaid.js      Excalidraw
+   (Syntax-based)  (JSON-based)
+        │               │
+        ├───────────────┤
+        │
+        ▼
+┌──────────────────────────┐
+│  Phase 1: Improve        │
+│  Description             │
+└──────────────────────────┘
+        │
+┌───────┴────────┐
+│  Mermaid:      │   Excalidraw:
+│  improve_      │   improve_excalidraw_
+│  mermaid_js_   │   diagram_description
+│  diagram_      │
+│  description   │
+└───────┬────────┘
+        │
+   Input Context:
+   - query
+   - location
+   - references (notes)
+   - online_results
+   - chat_history
+        │
+        ▼
+   LLM Enhancement
+   (Architect Role)
+        │
+┌───────┴────────┐
+│ Mermaid:       │  Excalidraw:
+│ Natural        │  Detailed layout with
+│ language       │  primitives (Text,
+│ description    │  Rectangle, Ellipse,
+│                │  Line, Arrow)
+└───────┬────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│  Phase 2: Generate       │
+│  Diagram Code            │
+└──────────────────────────┘
+        │
+┌───────┴────────┐
+│  Mermaid:      │   Excalidraw:
+│  mermaid_js_   │   excalidraw_diagram_
+│  diagram_      │   generation_prompt
+│  generation    │
+└───────┬────────┘
+        │
+   LLM Generation
+   (Designer Role)
+        │
+┌───────┴────────────────────┐
+│ Mermaid:                   │  Excalidraw:
+│ flowchart TB               │  JSON with elements[]
+│   A["Start"] --> B["End"]  │  [{type, x, y, id,
+│                            │    label, ...}]
+└───────┬────────────────────┘
+        │
+        ▼
+   Validation & Error Handling
+        │
+┌───────┴────────┐
+│ Valid?         │
+│ Yes → Return   │
+│ No  → Fallback │
+└───────┬────────┘
+        │
+        ▼
+   Display Diagram or
+   ASCII Fallback
+```
+
+### Mermaid.js Flow Example
+
+```
+User: "Create a diagram showing the software development lifecycle"
+
+Phase 1 - Improve Description:
+  "Create a flowchart with 5 stages connected in sequence:
+   Plan → Design → Implement → Test → Deploy.
+   Add feedback loops from Test back to Design and from Deploy
+   back to Plan for iterative development."
+
+Phase 2 - Generate Syntax:
+  flowchart TB
+      plan["Plan"] --> design["Design"]
+      design --> implement["Implement"]
+      implement --> test["Test"]
+      test --> deploy["Deploy"]
+      test --> design
+      deploy --> plan
+```
+
+### Excalidraw Flow Example
+
+```
+User: "Draw a circular development process"
+
+Phase 1 - Improve Description:
+  "Create a diagram with 3 ellipses labeled Design, Implement,
+   and Feedback arranged in a circle. Connect them with arrows
+   forming a circular flow: Design → Implement → Feedback → Design."
+
+Phase 2 - Generate JSON:
+  {
+    "scratchpad": "Circular process with 3 stages...",
+    "elements": [
+      {"type": "ellipse", "x": -169, "y": 113, "id": "design",
+       "label": {"text": "Design"}},
+      {"type": "ellipse", "x": 62, "y": 394, "id": "implement",
+       "label": {"text": "Implement"}},
+      {"type": "arrow", "x": 21, "y": 273, "id": "arrow1",
+       "start": {"id": "design"}, "end": {"id": "implement"}},
+      ...
+    ]
+  }
+```
+
+### Prompts Used
+
+**Mermaid.js Path:**
+1. **improve_mermaid_js_diagram_description_prompt**
+   - **Location**: `src/khoj/processor/conversation/prompts.py:311`
+2. **mermaid_js_diagram_generation_prompt**
+   - **Location**: `src/khoj/processor/conversation/prompts.py:348`
+
+**Excalidraw Path:**
+1. **improve_excalidraw_diagram_description_prompt**
+   - **Location**: `src/khoj/processor/conversation/prompts.py:167`
+2. **excalidraw_diagram_generation_prompt**
+   - **Location**: `src/khoj/processor/conversation/prompts.py:205`
+
+**Fallback:**
+- **failed_diagram_generation** (ASCII fallback)
+  - **Location**: `src/khoj/processor/conversation/prompts.py:425`
+
+### Diagram Types Supported
+
+**Mermaid.js:**
+- Flowcharts
+- Sequence Diagrams
+- State Diagrams
+- Gantt Charts
+- Pie Charts
+
+**Excalidraw:**
+- Text
+- Rectangles
+- Ellipses
+- Lines
+- Arrows
+- Hand-drawn aesthetic
+
+---
+
+## 7. Code Execution Pipeline
+
+### Overview
+When "code" is selected or the user requests data analysis/calculations, Khoj generates and executes Python code in a sandboxed environment.
+
+### Pipeline Diagram
+
+```
+        User Request (code/analysis)
+                    │
+                    ▼
+        ┌────────────────────────┐
+        │  python_code_          │
+        │  generation_prompt     │
+        └────────────────────────┘
+                    │
+        ┌───────────┴──────────┐
+        │  Input:              │
+        │  - instructions      │
+        │  - context (notes,   │
+        │    online results)   │
+        │  - chat_history      │
+        │  - has_network       │
+        │    _access           │
+        │  - current_date      │
+        └───────────┬──────────┘
+                    │
+                    ▼
+           LLM Code Generation
+           (Senior Engineer Role)
+                    │
+        ┌───────────┴──────────────┐
+        │  Python Code in          │
+        │  Markdown Block:         │
+        │  ```python               │
+        │  # Code here             │
+        │  import pandas as pd     │
+        │  ...                     │
+        │  # Save output to file   │
+        │  ```                     │
+        └───────────┬──────────────┘
+                    │
+                    ▼
+           Extract Code from Markdown
+                    │
+        ┌───────────┴──────────────┐
+        │                          │
+        ▼                          ▼
+   E2B Sandbox              Terrarium Sandbox
+   (Full packages)          (Limited packages)
+        │                          │
+        │  Available:              │  Available:
+        │  - requests              │  - matplotlib
+        │  - matplotlib            │  - pandas
+        │  - pandas                │  - numpy
+        │  - numpy                 │  - scipy
+        │  - scipy                 │  - bs5
+        │  - bs4                   │  - sympy
+        │  - sympy                 │
+        │  - torch                 │  NOT Available:
+        │  - plotly                │  - requests
+        │  - rdkit                 │  - torch
+        │  + more                  │  - tensorflow
+        │                          │  - rdkit
+        └───────────┬──────────────┘
+                    │
+                    ▼
+        Execute Code in Sandbox
+                    │
+        ┌───────────┴──────────────┐
+        │  Capture:                │
+        │  - stdout                │
+        │  - stderr                │
+        │  - Generated files       │
+        │  - Execution time        │
+        │  - Errors                │
+        └───────────┬──────────────┘
+                    │
+                    ▼
+        ┌────────────────────────┐
+        │  code_executed_        │
+        │  context               │
+        └────────────────────────┘
+                    │
+        ┌───────────┴──────────┐
+        │  Format Results:     │
+        │  - Text output       │
+        │  - File URLs         │
+        │  - Error messages    │
+        └───────────┬──────────┘
+                    │
+                    ▼
+        Add to LLM Context
+                    │
+                    ▼
+        LLM Interprets Results &
+        Responds to User
+```
+
+### Code Generation Example
+
+```
+User: "Calculate compound interest on $10,000 at 5% for 3 years"
+
+Generated Code:
+```python
+principal = 10000
+rate = 0.05
+years = 3
+
+# Calculate compound interest
+final_amount = principal * (1 + rate) ** years
+interest_earned = final_amount - principal
+
+print(f"Principal: ${principal:,.2f}")
+print(f"Interest Rate: {rate * 100}%")
+print(f"Time Period: {years} years")
+print(f"Final Amount: ${final_amount:,.2f}")
+print(f"Interest Earned: ${interest_earned:,.2f}")
+```
+
+Execution Output:
+  Principal: $10,000.00
+  Interest Rate: 5.0%
+  Time Period: 3 years
+  Final Amount: $11,576.25
+  Interest Earned: $1,576.25
+```
+
+### Visualization Example
+
+```
+User: "Plot the function y = x^2 for x from -10 to 10"
+
+Generated Code:
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(-10, 10, 100)
+y = x ** 2
+
+plt.figure(figsize=(10, 6))
+plt.plot(x, y, 'b-', linewidth=2)
+plt.xlabel('x')
+plt.ylabel('y = x²')
+plt.title('Graph of y = x²')
+plt.grid(True, alpha=0.3)
+plt.savefig('quadratic_function.png', dpi=150)
+```
+
+Output:
+  Generated file: quadratic_function.png (saved to sandbox)
+  File URL returned to user
+```
+
+### Prompts Used
+
+1. **python_code_generation_prompt**
+   - **Purpose**: Generate secure, self-contained Python code
+   - **Location**: `src/khoj/processor/conversation/prompts.py:878`
+
+2. **code_executed_context**
+   - **Purpose**: Format execution results for LLM
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1003`
+
+3. **e2b_sandbox_context** / **terrarium_sandbox_context**
+   - **Purpose**: Specify available packages
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1013-1019`
+
+### Security Features
+
+- Sandboxed execution (no host access)
+- Limited package availability
+- Execution timeout
+- No persistent state between runs
+- Output size limits
+
+### Key Files
+
+- `src/khoj/processor/tools/run_code.py:51` - Code execution engine
+
+---
+
+## 8. Research Agent Pipeline (/research mode)
+
+### Overview
+The research agent is a multi-iteration planning system that breaks down complex queries into sub-tasks and uses various tools to gather information.
+
+### Pipeline Diagram
+
+```
+    User Query with /research Command
+                    │
+                    ▼
+        ┌────────────────────────┐
+        │  Initialize Research   │
+        │  Agent                 │
+        └────────────────────────┘
+                    │
+        ┌───────────┴──────────┐
+        │  plan_function_      │
+        │  execution prompt    │
+        └───────────┬──────────┘
+                    │
+    ┌───────────────────────────────┐
+    │   ITERATION LOOP              │
+    │   (max 10 iterations)         │
+    │                               │
+    │       Current State           │
+    │            │                  │
+    │            ▼                  │
+    │   ┌──────────────────┐       │
+    │   │  Agent Decides   │       │
+    │   │  Next Action     │       │
+    │   └──────────────────┘       │
+    │            │                  │
+    │   ┌────────┴────────┐        │
+    │   │ Available Tools:│        │
+    │   │ - notes search  │        │
+    │   │ - online search │        │
+    │   │ - read webpage  │        │
+    │   │ - run code      │        │
+    │   │ - operate browser│       │
+    │   └────────┬────────┘        │
+    │            │                  │
+    │            ▼                  │
+    │   Execute Selected Tool      │
+    │            │                  │
+    │   ┌────────┴────────┐        │
+    │   │  Tool Result    │        │
+    │   │  Added to       │        │
+    │   │  Context        │        │
+    │   └────────┬────────┘        │
+    │            │                  │
+    │            ▼                  │
+    │   Agent Evaluates Progress   │
+    │            │                  │
+    │   ┌────────┴────────┐        │
+    │   │ Task Complete?  │        │
+    │   │ Yes → Exit      │        │
+    │   │ No  → Continue  │        │
+    │   └────────┬────────┘        │
+    │            │                  │
+    │            └──────┐           │
+    │                   │           │
+    └───────────────────┘           │
+                        │           │
+                        ▼           │
+            Repeat Iteration  ←─────┘
+                        │
+                        ▼
+        ┌────────────────────────┐
+        │  Compile All Results   │
+        └────────────────────────┘
+                        │
+                        ▼
+        Final Response to User
+```
+
+### Research Flow Example
+
+```
+User: "Find the population of my hometown and compare it to neighboring cities"
+
+Iteration 1:
+  Agent Decision: Use notes search to find user's hometown
+  Tool: notes_search
+  Query: "hometown birth certificate childhood"
+  Result: Found "Born in Springfield, MA"
+  
+Iteration 2:
+  Agent Decision: Search online for Springfield MA population
+  Tool: online_search
+  Query: "Springfield Massachusetts population 2025"
+  Result: "Population: 155,929 (2024 estimate)"
+
+Iteration 3:
+  Agent Decision: Find neighboring cities
+  Tool: online_search
+  Query: "cities near Springfield Massachusetts"
+  Result: "Chicopee, Holyoke, West Springfield, Agawam"
+
+Iteration 4:
+  Agent Decision: Get populations of neighboring cities
+  Tool: run_code
+  Code: Web scraping to get population data for each city
+  Result: 
+    Chicopee: 55,560
+    Holyoke: 38,247
+    West Springfield: 28,835
+    Agawam: 28,692
+
+Iteration 5:
+  Agent Decision: Task complete, compile results
+  Result: Comprehensive comparison with all data
+```
+
+### Tool Selection Logic
+
+```
+Available Tools:
+├─ notes_search        → Semantic search in user's documents
+├─ notes_search_regex  → Regex pattern matching in documents
+├─ view_file          → Read specific file contents
+├─ list_files         → List files in directory
+├─ online_search      → Web search
+├─ read_webpage       → Read specific webpage
+├─ run_code           → Execute Python for data processing
+└─ operate_browser    → Browser automation for complex tasks
+
+Agent chooses tools based on:
+- Previous results
+- Task requirements
+- Available data sources
+- Complexity of subtask
+```
+
+### Prompt Used
+
+- **plan_function_execution**
+  - **Purpose**: Multi-step planning and iteration
+  - **Location**: `src/khoj/processor/conversation/prompts.py:644`
+  - **Key Features**:
+    - Self-contained requests to tool AIs
+    - Independent, sequential steps
+    - Creative strategies when previous attempts fail
+    - No user confirmation for information gathering
+    - Maximum iterations limit
+
+### Data Flow
+
+```
+User Query
+    ↓
+plan_function_execution (initial)
+    ↓
+Agent decides: "Search user's notes for hometown"
+    ↓
+notes_search tool executed
+    ↓
+Results added to context
+    ↓
+plan_function_execution (iteration 2)
+    ↓
+Agent decides: "Search online for population data"
+    ↓
+online_search tool executed
+    ↓
+Results added to context
+    ↓
+...continue iterations...
+    ↓
+Agent decides: "Task complete, summarize findings"
+    ↓
+Final response compiled and returned
+```
+
+### Key Files
+
+- `src/khoj/routers/research.py:220` - Research agent implementation
+- `src/khoj/processor/conversation/prompts.py:644` - Planning prompt
+
+---
+
