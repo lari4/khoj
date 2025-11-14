@@ -1238,3 +1238,511 @@ Final response compiled and returned
 
 ---
 
+
+## 9. Operator Agent Pipeline (/operator mode)
+
+### Overview
+The operator agent controls a web browser or computer desktop using vision-enabled LLMs. It can click, type, navigate, and extract information from visual interfaces.
+
+### Pipeline Diagram
+
+```
+    User Request with /operator Command
+                    │
+                    ▼
+        ┌────────────────────────┐
+        │  Initialize Operator   │
+        │  Environment           │
+        └────────────────────────┘
+                    │
+        ┌───────────┴──────────┐
+        │  Environment Type:   │
+        │  - Browser (Chromium)│
+        │  - Computer (Desktop)│
+        └───────────┬──────────┘
+                    │
+    ┌───────────────────────────────────┐
+    │   AGENT ACTION LOOP               │
+    │   (max 100 iterations)            │
+    │                                   │
+    │   ┌──────────────────────┐       │
+    │   │  1. Take Screenshot  │       │
+    │   └──────────────────────┘       │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────┐       │
+    │   │  2. Encode Image     │       │
+    │   │     (Base64)         │       │
+    │   └──────────────────────┘       │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────────┐   │
+    │   │  3. Vision LLM Analysis  │   │
+    │   │     (Claude/GPT-4V)      │   │
+    │   └──────────────────────────┘   │
+    │            │                      │
+    │   ┌────────┴────────────┐        │
+    │   │  System Prompt:     │        │
+    │   │  - Browser/Computer │        │
+    │   │    instructions     │        │
+    │   │  - Current URL      │        │
+    │   │  - Date context     │        │
+    │   │  - Max iterations   │        │
+    │   └────────┬────────────┘        │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────┐       │
+    │   │  4. LLM Decides      │       │
+    │   │     Action(s)        │       │
+    │   └──────────────────────┘       │
+    │            │                      │
+    │   ┌────────┴────────────┐        │
+    │   │  Available Actions: │        │
+    │   │  - mouse_move       │        │
+    │   │  - left_click       │        │
+    │   │  - right_click      │        │
+    │   │  - double_click     │        │
+    │   │  - type             │        │
+    │   │  - key              │        │
+    │   │  - scroll           │        │
+    │   │  - goto (browser)   │        │
+    │   │  - back (browser)   │        │
+    │   │  - screenshot       │        │
+    │   │  - wait             │        │
+    │   └────────┬────────────┘        │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────┐       │
+    │   │  5. Execute Action   │       │
+    │   │     in Environment   │       │
+    │   └──────────────────────┘       │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────┐       │
+    │   │  6. Capture Result   │       │
+    │   │     (Success/Error)  │       │
+    │   └──────────────────────┘       │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────┐       │
+    │   │  7. Add to Message   │       │
+    │   │     History          │       │
+    │   └──────────────────────┘       │
+    │            │                      │
+    │            ▼                      │
+    │   ┌──────────────────────┐       │
+    │   │  Task Complete?      │       │
+    │   │  Yes → Exit          │       │
+    │   │  No  → Continue      │       │
+    │   └──────────┬───────────┘       │
+    │              │                    │
+    │              └──────┐             │
+    │                     │             │
+    └─────────────────────┘             │
+                          │             │
+                  Next Iteration  ←─────┘
+                          │
+                          ▼
+        ┌────────────────────────────┐
+        │  operator_execution_       │
+        │  context                   │
+        └────────────────────────────┘
+                          │
+                          ▼
+        Format Results for User
+                          │
+                          ▼
+        Final Response with
+        Screenshots & Actions Taken
+```
+
+### Action Sequence Example
+
+```
+User: "Search for 'Khoj AI' on DuckDuckGo and summarize the first result"
+
+Iteration 1:
+  Screenshot: Blank browser
+  LLM Decision: goto("https://duckduckgo.com")
+  Action: Navigate to DuckDuckGo
+  Result: Success
+
+Iteration 2:
+  Screenshot: DuckDuckGo homepage
+  LLM Decision: left_click(x=500, y=300) on search box
+  Action: Click search input
+  Result: Search box focused
+
+Iteration 3:
+  Screenshot: Search box focused
+  LLM Decision: type("Khoj AI")
+  Action: Type search query
+  Result: Text entered
+
+Iteration 4:
+  Screenshot: Query typed
+  LLM Decision: key("Return")
+  Action: Press Enter
+  Result: Search submitted
+
+Iteration 5:
+  Screenshot: Search results page
+  LLM Decision: left_click(x=400, y=200) on first result
+  Action: Click first search result
+  Result: Navigated to page
+
+Iteration 6:
+  Screenshot: Article page
+  LLM Decision: scroll(direction="down", amount=5)
+  Action: Scroll to read content
+  Result: Page scrolled
+
+Iteration 7:
+  Screenshot: More content visible
+  LLM Analysis: Extract key information from visible text
+  Result: Summary compiled
+
+Iteration 8:
+  LLM Decision: Task complete
+  Result: Return summary to user
+```
+
+### Browser vs Computer Mode
+
+**Browser Mode:**
+- Chromium browser via Playwright
+- Limited to web interactions
+- No filesystem access
+- Helper functions: `goto()`, `back()`
+- DuckDuckGo for searches
+
+**Computer Mode:**
+- Full desktop control
+- Can interact with any application
+- File access available
+- More general-purpose
+- Same action primitives
+
+### Prompts Used
+
+1. **Browser Operator Instructions**
+   - **Purpose**: System prompt for browser automation
+   - **Location**: `src/khoj/processor/operator/operator_agent_anthropic.py:554`
+   - **Key Instructions**:
+     - Operate Chromium browser with Playwright
+     - Use DuckDuckGo for searches
+     - Zoom out to see full pages
+     - Chain multiple actions when possible
+     - Maximum iterations limit
+
+2. **Computer Operator Instructions**
+   - **Purpose**: System prompt for desktop automation
+   - **Location**: `src/khoj/processor/operator/operator_agent_anthropic.py:577`
+   - **Key Instructions**:
+     - Full computer interaction
+     - Document/webpage handling
+     - Action chaining
+     - Iteration limits
+
+3. **operator_execution_context**
+   - **Purpose**: Format operator results for user
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1021`
+
+### Vision-Action Loop
+
+```
+Screenshot (PNG/Base64)
+    ↓
+Vision LLM (Claude 3.5 Sonnet / GPT-4V)
+    ↓
+Analyze UI elements, text, buttons, forms
+    ↓
+Decide action(s) with coordinates
+    ↓
+Execute in environment
+    ↓
+Capture new screenshot
+    ↓
+Repeat until task complete
+```
+
+### Key Files
+
+- `src/khoj/processor/operator/__init__.py:34` - Main operator function
+- `src/khoj/processor/operator/operator_agent_anthropic.py` - Anthropic implementation
+- `src/khoj/processor/operator/operator_agent_openai.py` - OpenAI implementation
+
+---
+
+## 10. Automation & Scheduled Tasks
+
+### Overview
+Users can schedule recurring tasks that run automatically. The system parses natural language schedules, executes tasks on cron schedules, and optionally notifies users of results.
+
+### Pipeline Diagram
+
+```
+    User: "Show me top HN posts every Monday at 6pm"
+                        │
+                        ▼
+        ┌────────────────────────────┐
+        │  crontime_prompt           │
+        └────────────────────────────┘
+                        │
+        ┌───────────────┴──────────────┐
+        │  Input:                      │
+        │  - query (user request)      │
+        │  - chat_history              │
+        └───────────────┬──────────────┘
+                        │
+                        ▼
+               LLM Parsing
+          (Schedule + Query + Subject)
+                        │
+        ┌───────────────┴──────────────────┐
+        │  Output JSON:                    │
+        │  {                               │
+        │    "crontime": "0 18 * * 1",     │
+        │    "query": "/automated_task     │
+        │             Top HN posts",       │
+        │    "subject": "Weekly Top        │
+        │                HN Posts"         │
+        │  }                               │
+        └───────────────┬──────────────────┘
+                        │
+                        ▼
+        ┌────────────────────────────┐
+        │  Create Automation Job     │
+        │  (APScheduler)             │
+        └────────────────────────────┘
+                        │
+                        ▼
+        Store in Database with User Timezone
+                        │
+                        ▼
+        ═══════════════════════════════
+        SCHEDULED EXECUTION (Recurring)
+        ═══════════════════════════════
+                        │
+                        ▼
+        Cron Trigger Fires
+                        │
+                        ▼
+        ┌────────────────────────────┐
+        │  Execute Automated Query   │
+        │  (Run through chat API)    │
+        └────────────────────────────┘
+                        │
+                        ▼
+        Generate AI Response
+        (Uses full chat pipeline)
+                        │
+                        ▼
+        ┌────────────────────────────┐
+        │  to_notify_or_not          │
+        │  (Notification Decision)   │
+        └────────────────────────────┘
+                        │
+        ┌───────────────┴──────────────┐
+        │  Input:                      │
+        │  - original_query            │
+        │  - executed_query            │
+        │  - response                  │
+        └───────────────┬──────────────┘
+                        │
+                        ▼
+               LLM Decision
+                        │
+        ┌───────────────┴──────────────────┐
+        │  Output JSON:                    │
+        │  {                               │
+        │    "reason": "AI generated        │
+        │               result",            │
+        │    "decision": "Yes" or "No"     │
+        │  }                               │
+        └───────────────┬──────────────────┘
+                        │
+        ┌───────────────┴──────────────┐
+        │  Decision == "Yes"?          │
+        │  Yes → Send Notification     │
+        │  No  → Skip (wait for next)  │
+        └───────────────┬──────────────┘
+                        │
+                        ▼
+        ┌────────────────────────────┐
+        │  automation_format_prompt  │
+        │  (Format for Email)        │
+        └────────────────────────────┘
+                        │
+        ┌───────────────┴──────────────┐
+        │  Input:                      │
+        │  - username                  │
+        │  - original_query            │
+        │  - executed_query            │
+        │  - response                  │
+        └───────────────┬──────────────┘
+                        │
+                        ▼
+        LLM Formatting
+        (Markdown report with sections)
+                        │
+                        ▼
+        ┌────────────────────────────┐
+        │  Send Email Notification   │
+        │  Subject: Task subject     │
+        │  Body: Formatted response  │
+        └────────────────────────────┘
+                        │
+                        ▼
+        User Receives Email
+                        │
+                        ▼
+        Wait for Next Cron Trigger
+```
+
+### Schedule Parsing Examples
+
+```
+User: "Show a Calvin and Hobbes quote every morning at 9am"
+Parsed:
+  crontime: "0 9 * * *"     (9am daily)
+  query: "Share a funny Calvin and Hobbes quote from my notes"
+  subject: "Your Daily Calvin and Hobbes Quote"
+
+User: "Notify me when Khoj 2.0.0 is released"
+Parsed:
+  crontime: "0 10 * * *"    (10am daily, checks condition)
+  query: "/automated_task /research What is the latest Khoj version?"
+  subject: "Khoj Version 2.0.0 Release"
+
+User: "Tech news on first Sunday of every month"
+Parsed:
+  crontime: "0 8 1-7 * 0"   (8am, days 1-7, Sunday)
+  query: "/automated_task Find latest tech news"
+  subject: "Your Monthly Tech News"
+```
+
+### Notification Decision Logic
+
+```
+Example 1 - Notify:
+  Original: "Show a quote every morning"
+  Executed: "Share a Calvin and Hobbes quote"
+  Response: "Here's a quote: 'It's not denial...'"
+  Decision: "Yes" (content generated successfully)
+  → Email sent
+
+Example 2 - Don't Notify:
+  Original: "Notify when it rains tomorrow"
+  Executed: "Will it rain tomorrow?"
+  Response: "Tomorrow will be sunny"
+  Decision: "No" (condition not met)
+  → Email not sent, wait for next day
+
+Example 3 - Notify:
+  Original: "Summary of completed tasks daily"
+  Executed: "Generate task summary"
+  Response: "You completed: 1. Meeting, 2. Report"
+  Decision: "Yes" (summary available)
+  → Email sent
+```
+
+### Prompts Used
+
+1. **crontime_prompt**
+   - **Purpose**: Parse natural language into cron schedule
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1033`
+
+2. **subject_generation**
+   - **Purpose**: Generate email subject for task
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1099`
+
+3. **to_notify_or_not**
+   - **Purpose**: Decide if user should be notified
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1214`
+
+4. **automation_format_prompt**
+   - **Purpose**: Format response as email-ready markdown
+   - **Location**: `src/khoj/processor/conversation/prompts.py:1255`
+
+### Cron Time Format
+
+```
+ ┌─────── minute (0-59)
+ │ ┌────── hour (0-23)
+ │ │ ┌───── day of month (1-31)
+ │ │ │ ┌──── month (1-12)
+ │ │ │ │ ┌─── day of week (0-7, Sunday=0 or 7)
+ │ │ │ │ │
+ * * * * *
+
+Examples:
+  "0 9 * * *"     - 9am every day
+  "0 18 * * 1"    - 6pm every Monday
+  "0 8 1-7 * 0"   - 8am first Sunday of month
+  "0 */4 * * *"   - Every 4 hours
+```
+
+### Key Files
+
+- `src/khoj/routers/api_automation.py:51` - Automation endpoints
+- `src/khoj/processor/conversation/prompts.py:1033` - Schedule parsing
+
+---
+
+## Summary
+
+This document has covered 10 major agent pipelines in Khoj:
+
+1. **Main Chat Pipeline** - Core conversation flow with intelligent routing
+2. **Data Source Selection** - LLM-driven decision on which sources to use
+3. **Query Generation & Document Search** - Semantic search in user's notes
+4. **Online Search Pipeline** - Web search and webpage reading
+5. **Image Generation** - AI-powered image creation with enhancement
+6. **Diagram Generation** - Mermaid.js and Excalidraw diagrams
+7. **Code Execution** - Sandboxed Python code generation and execution
+8. **Research Agent** - Multi-iteration planning and tool usage
+9. **Operator Agent** - Vision-guided browser/desktop automation
+10. **Automation & Scheduled Tasks** - Cron-based recurring AI tasks
+
+### Key Architectural Patterns
+
+**Multi-Stage Prompting:**
+- Most complex pipelines use 2-4 sequential prompts
+- Each prompt refines the output of the previous
+- Structured JSON responses enable deterministic parsing
+
+**Parallel Execution:**
+- Multiple data sources gathered concurrently
+- Document searches across file types run in parallel
+- Streaming responses for reduced latency
+
+**Context Management:**
+- Token-aware message building
+- Selective truncation of large results
+- Per-user result caching
+
+**Error Handling:**
+- Graceful fallbacks at each stage
+- Partial state preservation
+- ASCII diagram fallback for generation failures
+
+**Security:**
+- Sandboxed code execution
+- Browser automation isolation
+- Prompt safety validation
+
+### Prompt Orchestration
+
+All prompts are centrally defined in `src/khoj/processor/conversation/prompts.py` and dynamically injected with:
+- User context (name, location, timezone)
+- Temporal context (date, day of week)
+- Conversation history
+- Retrieved data (notes, web results)
+- Agent personality
+
+This architecture enables Khoj to provide intelligent, context-aware assistance across a wide range of tasks while maintaining security and reliability.
+
+---
+
+**End of Agent Pipelines Documentation**
