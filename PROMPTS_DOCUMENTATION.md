@@ -177,3 +177,220 @@ User's Name: {name}
 
 ---
 
+## Conversation Prompts
+
+### 7. General Conversation Prompt
+
+**Purpose**: The simplest conversation template that just passes through the user query. Used for general knowledge questions that don't require searching notes or the internet.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:66-70`
+
+**Template Variables**:
+- `{query}` - The user's question or message
+
+```python
+general_conversation = PromptTemplate.from_template(
+    """
+{query}
+""".strip()
+)
+```
+
+---
+
+### 8. Notes Conversation Prompt
+
+**Purpose**: Used when chatting with the user's personal notes and documents. Instructs the AI to use retrieved document chunks to answer questions and ask follow-up questions when needed.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:92-101`
+
+**Template Variables**:
+- `{references}` - Retrieved chunks from user's notes/documents
+
+```python
+notes_conversation = PromptTemplate.from_template(
+    """
+Use my personal notes and our past conversations to inform your response.
+Ask crisp follow-up questions to get additional context, when a helpful response cannot be provided from the provided notes or past conversations.
+
+User's Notes:
+-----
+{references}
+""".strip()
+)
+```
+
+---
+
+### 9. Notes Conversation (Offline)
+
+**Purpose**: Similar to notes conversation but for offline models. Doesn't include instructions about asking follow-up questions since offline models may have different capabilities.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:103-111`
+
+**Template Variables**:
+- `{references}` - Retrieved chunks from user's notes/documents
+
+```python
+notes_conversation_offline = PromptTemplate.from_template(
+    """
+Use my personal notes and our past conversations to inform your response.
+
+User's Notes:
+-----
+{references}
+""".strip()
+)
+```
+
+---
+
+### 10. Online Search Conversation Prompt
+
+**Purpose**: Used when answering questions using web search results. Provides internet-sourced information to the AI.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:438-447`
+
+**Template Variables**:
+- `{online_results}` - Search results from the internet
+
+```python
+online_search_conversation = PromptTemplate.from_template(
+    """
+Use this up-to-date information from the internet to inform your response.
+Ask crisp follow-up questions to get additional context, when a helpful response cannot be provided from the online data or past conversations.
+
+Information from the internet:
+-----
+{online_results}
+""".strip()
+)
+```
+
+---
+
+### 11. Online Search Conversation (Offline)
+
+**Purpose**: Online search results prompt for offline models without follow-up question instructions.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:449-457`
+
+**Template Variables**:
+- `{online_results}` - Search results from the internet
+
+```python
+online_search_conversation_offline = PromptTemplate.from_template(
+    """
+Use this up-to-date information from the internet to inform your response.
+
+Information from the internet:
+-----
+{online_results}
+""".strip()
+)
+```
+
+---
+
+### 12. Query Prompt Template
+
+**Purpose**: Simple template for formatting user queries.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:461-464`
+
+**Template Variables**:
+- `{query}` - User's query
+
+```python
+query_prompt = PromptTemplate.from_template(
+    """
+Query: {query}""".strip()
+)
+```
+
+---
+
+### 13. No Notes Found Error
+
+**Purpose**: Error message when no relevant notes are found for the user's query.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:72-76`
+
+**Template Variables**: None
+
+```python
+no_notes_found = PromptTemplate.from_template(
+    """
+    I'm sorry, I couldn't find any relevant notes to respond to your message.
+    """.strip()
+)
+```
+
+---
+
+### 14. No Online Results Found Error
+
+**Purpose**: Error message when no relevant internet results are found.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:78-82`
+
+**Template Variables**: None
+
+```python
+no_online_results_found = PromptTemplate.from_template(
+    """
+    I'm sorry, I couldn't find any relevant information from the internet to respond to your message.
+    """.strip()
+)
+```
+
+---
+
+### 15. No Entries Found Message
+
+**Purpose**: Message shown when user hasn't synced any documents yet, with a link to download the app.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:84-88`
+
+**Template Variables**: None
+
+```python
+no_entries_found = PromptTemplate.from_template(
+    """
+    It looks like you haven't synced any notes yet. No worries, you can fix that by downloading the Khoj app from <a href=https://khoj.dev/downloads#desktop>here</a>.
+""".strip()
+)
+```
+
+---
+
+### 16. Help Message
+
+**Purpose**: Displays available slash commands and system information to the user.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:1277-1290`
+
+**Template Variables**:
+- `{model}` - Current model being used
+- `{device}` - Device where model is running
+- `{version}` - Khoj version
+
+```python
+help_message = PromptTemplate.from_template(
+    """
+- **/notes**: Chat using the information in your knowledge base.
+- **/general**: Chat using just Khoj's general knowledge. This will not search against your notes.
+- **/online**: Chat using the internet as a source of information.
+- **/image**: Generate an image based on your message.
+- **/research**: Go deeper in a topic for more accurate, in-depth responses.
+- **/operator**: Use a web browser to execute actions and search for information.
+- **/help**: Show this help message.
+
+You are using the **{model}** model on the **{device}**.
+**version**: {version}
+""".strip()
+)
+```
+
+---
+
