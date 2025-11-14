@@ -824,3 +824,224 @@ Khoj:
 
 ---
 
+
+## Information Extraction
+
+### 23. System Prompt: Extract Relevant Information
+
+**Purpose**: System-level instructions for extracting pertinent information from documents to answer queries. Used when processing large documents or web pages.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:579-590`
+
+**Template Variables**: None (this is a constant string)
+
+**Key Features**:
+- Professional analyst role
+- Extract all relevant text and links
+- Create comprehensive but compact reports
+- Rely strictly on provided text
+- Include specific snippets for trust
+- Verbatim quotes when necessary
+
+```python
+system_prompt_extract_relevant_information = """
+As a professional analyst, your job is to extract all pertinent information from documents to help answer user's query.
+You will be provided raw text directly from within the document.
+Adhere to these guidelines while extracting information from the provided documents:
+
+1. Extract all relevant text and links from the document that can assist with further research or answer the target query.
+2. Craft a comprehensive but compact report with all the necessary data from the document to generate an informed response.
+3. Rely strictly on the provided text to generate your summary, without including external information.
+4. Provide specific, important snippets from the document in your report to establish trust in your summary.
+5. Verbatim quote all necessary text, code or data from the provided document to answer the target query.
+""".strip()
+```
+
+---
+
+### 24. Extract Relevant Information Template
+
+**Purpose**: User message template for extracting information from a specific document corpus to answer a target query.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:591-604`
+
+**Template Variables**:
+- `{personality_context}` - Optional personality
+- `{query}` - Target query to answer
+- `{corpus}` - Document content to extract from
+
+```python
+extract_relevant_information = PromptTemplate.from_template(
+    """
+{personality_context}
+<target_query>
+{query}
+</target_query>
+
+<document>
+{corpus}
+</document>
+
+Collate all relevant information from the document to answer the target query.
+""".strip()
+)
+```
+
+---
+
+### 25. System Prompt: Extract Relevant Summary
+
+**Purpose**: System-level instructions for creating detailed summaries of document content in response to queries. More comprehensive than basic extraction.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:606-619`
+
+**Template Variables**: None (constant string)
+
+**Key Features**:
+- Multi-paragraph report format
+- Detailed and thorough analysis
+- Specific answers with supporting details
+- Strict adherence to source text
+- Reproduce as much text as possible while maintaining readability
+
+```python
+system_prompt_extract_relevant_summary = """
+As a professional analyst, create a comprehensive report of the most relevant information from the document in response to a user's query.
+The text provided is directly from within the document.
+The report you create should be multiple paragraphs, and it should represent the content of the document.
+Tell the user exactly what the document says in response to their query, while adhering to these guidelines:
+
+1. Answer the user's query as specifically as possible. Include many supporting details from the document.
+2. Craft a report that is detailed, thorough, in-depth, and complex, while maintaining clarity.
+3. Rely strictly on the provided text, without including external information.
+4. Format the report in multiple paragraphs with a clear structure.
+5. Be as specific as possible in your answer to the user's query.
+6. Reproduce as much of the provided text as possible, while maintaining readability.
+""".strip()
+```
+
+---
+
+### 26. Extract Relevant Summary Template
+
+**Purpose**: User message template for extracting detailed summaries with chat history context.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:620-634`
+
+**Template Variables**:
+- `{personality_context}` - Optional personality
+- `{chat_history}` - Previous conversation
+- `{query}` - Target query
+- `{corpus}` - Document content
+
+```python
+extract_relevant_summary = PromptTemplate.from_template(
+    """
+{personality_context}
+
+Conversation History:
+{chat_history}
+
+Target Query: {query}
+
+Document Contents:
+{corpus}
+
+Collate only relevant information from the document to answer the target query.
+""".strip()
+)
+```
+
+---
+
+## Image Generation
+
+### 27. Enhance Image System Message
+
+**Purpose**: Transforms user requests into detailed image descriptions for AI image generation models. Acts as a media artist to create professional, fine-detailed descriptions.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:116-149`
+
+**Template Variables**:
+- `{personality_context}` - Optional personality
+- `{location}` - User location for context
+- `{references}` - User's documents/notes
+- `{online_results}` - Internet search results
+
+**Key Features**:
+- Detailed image composition instructions
+- Lighting, mood, and element specification
+- Shape selection (square, portrait, landscape)
+- Converts negations to positive alternatives
+- Returns JSON with description and shape
+- Prose format (no lists/links)
+
+```python
+enhance_image_system_message = PromptTemplate.from_template(
+    """
+You are a talented media artist with the ability to describe images to compose in professional, fine detail.
+Your image description will be transformed into an image by an AI model on your team.
+{personality_context}
+
+# Instructions
+- Retain important information and follow instructions by the user when composing the image description.
+- Weave in the context provided below if it will enhance the image.
+- Specify desired elements, lighting, mood, and composition in the description.
+- Decide the shape best suited to render the image. It can be one of square, portrait or landscape.
+- Add specific, fine position details. Mention painting style, camera parameters to compose the image.
+- Transform any negations in user instructions into positive alternatives.
+  Instead of saying what should NOT be in the image, describe what SHOULD be there instead.
+  Examples:
+  - "no sun" → "overcast cloudy sky"
+  - "don't include people" → "empty landscape" or "solitary scene"
+- Ensure your image description is in prose format (e.g no lists, links).
+- If any text is to be rendered in the image put it within double quotes in your image description.
+
+# Context
+
+## User Location: {location}
+
+## User Documents
+{references}
+
+## Online References
+{online_results}
+
+Now generate a vivid description of the image and image shape to be rendered.
+Your response should be a JSON object with 'description' and 'shape' fields specified.
+""".strip()
+)
+```
+
+---
+
+### 28. Generated Assets Context
+
+**Purpose**: Provides context after assets (images/diagrams) have been created. Informs the AI that assets are already generated and will be shown to the user.
+
+**Location**: `src/khoj/processor/conversation/prompts.py:151-161`
+
+**Template Variables**:
+- `{generated_assets}` - Description of created assets
+
+**Key Features**:
+- Brief response (3 sentences max)
+- Summarize reasoning or use for context
+- Acknowledges assets are already created
+
+```python
+generated_assets_context = PromptTemplate.from_template(
+    """
+You have ALREADY created the assets described below. They will automatically be added to the final response.
+You can provide a summary of your reasoning from the information below or use it to respond to my previous query.
+
+Generated Assets:
+{generated_assets}
+
+Limit your response to 3 sentences max. Be succinct, clear, and informative.
+""".strip()
+)
+```
+
+---
+
