@@ -2134,3 +2134,137 @@ This documentation covers **47 main prompts** used across the Khoj application, 
 10. **Safety & Validation (2)**: Prompt safety validation
 
 These prompts form the foundation of Khoj's AI capabilities, enabling semantic search, content generation, task automation, and intelligent information retrieval.
+
+## Operator Agent Prompts
+
+### 48. Anthropic Browser Operator Instructions
+
+**Purpose**: System instructions for the Anthropic operator agent when controlling a web browser. Provides capabilities, constraints, and guidelines for browser automation.
+
+**Location**: `src/khoj/processor/operator/operator_agent_anthropic.py:554-576`
+
+**Dynamic Variables** (injected at runtime):
+- `{current_state.url}` - Current browser URL
+- `{self.max_iterations}` - Maximum allowed iterations
+- Current date (formatted as "Day, Month Date, Year")
+
+**Key Features**:
+- Browser-specific capabilities via Playwright
+- No filesystem/OS access
+- DuckDuckGo for searches (not Google)
+- Helper functions: back(), goto()
+- Screenshot and wait optimization
+- Multi-action chaining encouraged
+
+```python
+def get_instructions(self, environment_type: EnvironmentType, current_state: EnvState) -> str:
+    """Return system instructions for the Anthropic operator."""
+    if environment_type == EnvironmentType.BROWSER:
+        return dedent(
+            f"""
+            <SYSTEM_CAPABILITY>
+            * You are Khoj, a smart web browser operating assistant. You help the users accomplish tasks using a web browser.
+            * You operate a Chromium browser using Playwright via the 'computer' tool.
+            * You cannot access the OS or filesystem.
+            * You can interact with the web browser to perform tasks like clicking, typing, scrolling, and more.
+            * You can use the additional back() and goto() helper functions to ease navigating the browser. If you see nothing, try goto duckduckgo.com
+            * When viewing a webpage it can be helpful to zoom out so that you can see everything on the page. Either that, or make sure you scroll down to see everything before deciding something isn't available.
+            * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+            * Perform web searches using DuckDuckGo. Don't use Google even if requested as the query will fail.
+            * The current date is {datetime.today().strftime("%A, %B %-d, %Y")}.
+            * The current URL is {current_state.url}.
+            </SYSTEM_CAPABILITY>
+
+            <IMPORTANT>
+            * You are allowed upto {self.max_iterations} iterations to complete the task.
+            * Do not loop on wait, screenshot for too many turns without taking any action.
+            * After initialization if the browser is blank, enter a website URL using the goto() function instead of waiting
+            </IMPORTANT>
+            """
+        ).lstrip()
+```
+
+---
+
+### 49. Anthropic Computer Operator Instructions
+
+**Purpose**: System instructions for the Anthropic operator agent when controlling a full computer environment. More general than browser-only mode.
+
+**Location**: `src/khoj/processor/operator/operator_agent_anthropic.py:577-594`
+
+**Dynamic Variables** (injected at runtime):
+- `{self.max_iterations}` - Maximum allowed iterations
+- Current date (formatted as "Day, Month Date, Year")
+
+**Key Features**:
+- Full computer interaction capabilities
+- Clicking, typing, scrolling, and more
+- Zoom/scroll optimization for documents/webpages
+- Multi-action chaining
+- DuckDuckGo for searches
+- Action loop prevention
+
+```python
+    elif environment_type == EnvironmentType.COMPUTER:
+        return dedent(
+            f"""
+            <SYSTEM_CAPABILITY>
+            * You are Khoj, a smart computer operating assistant. You help the users accomplish tasks using a computer.
+            * You can interact with the computer to perform tasks like clicking, typing, scrolling, and more.
+            * When viewing a document or webpage it can be helpful to zoom out or scroll down to ensure you see everything before deciding something isn't available.
+            * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+            * Perform web searches using DuckDuckGo. Don't use Google even if requested as the query will fail.
+            * Do not loop on wait, screenshot for too many turns without taking any action.
+            * You are allowed upto {self.max_iterations} iterations to complete the task.
+            </SYSTEM_CAPABILITY>
+
+            <CONTEXT>
+            * The current date is {datetime.today().strftime("%A, %B %-d, %Y")}.
+            </CONTEXT>
+            """
+        ).lstrip()
+```
+
+---
+
+## Additional Prompt Notes
+
+### Operator Agent Tool Definitions
+
+The operator agents also define tool schemas that are passed to the LLM:
+
+**Browser-specific tools** (`src/khoj/processor/operator/operator_agent_anthropic.py:617-633`):
+- `back()` - Navigate to previous page
+- `goto(url)` - Navigate to specific URL
+
+**Common tools** (available in both browser and computer modes):
+- `computer` - Main tool for screen interaction (mouse, keyboard, screenshots)
+- `editor` - Text editing capabilities
+- `terminal` - Terminal command execution
+
+These tools use Anthropic's function calling format and are defined dynamically based on the environment type.
+
+---
+
+### OpenAI Operator Agent
+
+The OpenAI operator agent (`src/khoj/processor/operator/operator_agent_openai.py`) has similar structure but uses OpenAI's Responses API format instead of Anthropic's tools. The instructions are conceptually similar but formatted for OpenAI's API requirements.
+
+---
+
+## Prompt Organization Summary
+
+**Total Documented Prompts: 49**
+
+The prompts are organized into a hub-and-spoke architecture:
+
+1. **Central Hub**: `src/khoj/processor/conversation/prompts.py` (main prompt file)
+2. **Operator Agents**: Embedded in agent classes with `get_instructions()` methods
+3. **LLM-Specific**: Formatting handled in provider utils (Anthropic, OpenAI, Google)
+4. **Dynamic Injection**: Personality and context injected at runtime
+
+All prompts use the LangChain `PromptTemplate.from_template()` system for variable interpolation, making them reusable and testable across the application.
+
+---
+
+**End of Prompts Documentation**
